@@ -90,6 +90,7 @@ MODE="kvmi"
 CONNECTIONMODE="abap"
 CONFIGPATH="/opt"
 TRUSTEDCA=()
+CLOUD='public'
 
 while [[ $# -gt 0 ]]; do
 	case $1 in
@@ -238,6 +239,10 @@ while [[ $# -gt 0 ]]; do
 		DEVACRPWD="$2"
 		shift 2
 		;;
+	--cloud)
+		CLOUD="$2"
+		shift 2
+		;;
 	--preview)
 		PREVIEW=1
 		shift 1
@@ -370,48 +375,39 @@ if [ -n "$SDKFILELOC" ] && [ ! -f "$SDKFILELOC" ]; then
 	exit 1
 fi
 
+if [ "$CLOUD" != 'public' ] && [  "$CLOUD" != 'fairfax' ]; then
+	echo 'Invalid cloud name, avilable options: public, fairfax'
+	exit 1
+fi
+
 # End of parameter validation
 echo '
 ************************************************************
 THIS INSTALLATION SCRIPT WILL USE ROOT ACCESS TO:
-
 1. DOWNLOAD, INSTALL AND CONFIGURE DOCKER IMAGE
 2. ADD THE CURRENT USER TO THE DOCKER GROUP
 3. RUN THE CONNECTOR AS A DOCKER CONTAINER ON THE HOST
-
 *************************************************************
 The Azure Sentinel SAP solution is currently in PREVIEW. 
-
 The Azure Preview Supplemental Terms include additional legal terms that apply to Azure features that are in beta, preview, or otherwise not yet released into general availability.
-
 For more information, see https://azure.microsoft.com/support/legal/preview-supplemental-terms/.
 ****
-
 -----Microsoft continuous threat monitoring for SAP KickStart script----
-
 In order to complete the installation process, you need:
-
 - SAP version: The Azure Sentinel SAP Logs connector requires a SAP version of 7.4 or higher.
-
 - SAP system details: Make a note of your SAP system IP address, system number, system ID, and client for use during the installation.
-
 - SAP change requests: Import any required change requests for your logs from the CR folder of this repository - https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/SAP/CR.
-
 Configure the following SAP Log change requests to enable support for ingesting specific SAP logs into Azure Sentinel.
 - SAP Basis versions 7.5 and higher:  install NPLK900180
 - SAP Basis version 7.4:  install NPLK900179
 - To create your SAP role in any SAP version: install NPLK900163
-
 Tip: To create your SAP role with all required authorizations, deploy the SAP change request NPLK900140 on your SAP system. 
 This change request creates the /msftsen/sentinel_connector role, and assigns the role to the ABAP connecting to Azure Sentinel.
-
 SAP notes required for versions earlier than SAP Basis 7.5 SP13:
 - SAP Note 2641084, named *Standardized read access for the Security Audit log data*
 - SAP Note 2173545, named *CHANGEDOCUMENT_READ_ALL*
 - SAP Note 2502336, named *RSSCD100 - read only from archive, not from database*
-
 Note: The required SAP log change requests expose custom RFC FMs that are required for the connector, and do not change any standard or custom objects.
-
 For more information see the SAP documentation.
 '
 
@@ -507,12 +503,19 @@ if [ $DEVMODE ]; then
 	tagver=$(echo "$DEVURL" | awk -F: '{print ":"$2}')
 else
 	dockerimage=mcr.microsoft.com/azure-sentinel/solutions/sapcon
-	if [ $PREVIEW ]; then
-		tagver=":latest-preview"
-	else
-		tagver=":latest"
+	if [ $CLOUD == 'public' ]; then
+		tagver=':latest'
+	elif [ $CLOUD == 'fairfax' ]; then
+		tagver=':ffx-latest'
+		az cloud set --name "AzureUSGovernment" >/dev/null 2>&1
 	fi
+	
+	if [ $PREVIEW ]; then
+		tagver=tagver+"-preview"
+	fi
+
 fi
+
 
 # sudo groupadd docker
 echo "Creating group 'docker' and adding current user to 'docker' group"
